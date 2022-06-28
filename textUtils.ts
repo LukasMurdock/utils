@@ -1,3 +1,11 @@
+export function removeSpaces(string: string) {
+    return string.replace(' ', '');
+}
+
+export function removeConsecutiveSpaces(string: string) {
+    return string.split(/\s+/).join(' ');
+}
+
 export function capitalizeFirstLetter(text: string) {
     return text.charAt(0).toUpperCase() + text.slice(1);
 }
