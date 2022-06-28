@@ -1,8 +1,5 @@
-import { NestedPaths } from './nestedObjectPaths.ts';
 import { decodeBase64 } from './base64.ts';
 import { removeConsecutiveSpaces } from './textUtils.ts';
-
-type GenericObject = Record<string, unknown>;
 
 export type ApiDesignRequest = {
     // field_mask: string
@@ -22,19 +19,18 @@ export type ApiDesignResponse<T> = {
     next_page_token: string | null;
 };
 
-type OrderByDefaultConfig<T extends GenericObject> = {
-    field: NestedPaths<T>;
-    direction: 'desc' | 'asc';
-}[];
+type OrderByConfig<T> = Array<keyof T>;
 
-type OrderByConfig<T extends GenericObject> = NestedPaths<T>[];
+type DefaultOrderBy<T> = Array<{
+    [K in keyof T]?: 'desc' | 'asc';
+}>;
 
-export type ApiDesignConfig<T extends GenericObject> = {
+export type ApiDesignConfig<T> = {
     orderBy: OrderByConfig<T>;
     maxPageSize: number;
     defaults: {
-        orderBy: OrderByDefaultConfig<T>;
         pageSize: number;
+        orderBy?: DefaultOrderBy<T>;
     };
 };
 
@@ -51,7 +47,7 @@ export type ApiDesignConfig<T extends GenericObject> = {
  * - (not supported, yet?) field_mask: string
  * - (not supported, yet?) filter: string
  */
-export function parseURLSearchParams<T extends GenericObject>(
+export function parseURLSearchParams<T>(
     searchParams: URLSearchParams,
     config: ApiDesignConfig<T>
 ) {
@@ -60,7 +56,7 @@ export function parseURLSearchParams<T extends GenericObject>(
 
     const pagination = {
         ...parsePageToken(searchParams.get('page_token')),
-        pageSize: parsePageSize<T>(searchParams.get('page_size'), config),
+        pageSize: parsePageSize(searchParams.get('page_size'), config),
     };
 
     return {
@@ -72,29 +68,48 @@ export function parseURLSearchParams<T extends GenericObject>(
 
 export type OrderBy = { field: string; direction: 'asc' | 'desc' };
 
-// TODO: allow field traversal with wildcard '*'
-export function parseOrderBy<T extends GenericObject>(
+// Currently only works one level deep
+// TODO: allow field traversal with '.' and wildcard '*'
+export function parseOrderBy<T>(
     query: string | null,
     config: ApiDesignConfig<T>
 ) {
     if (query === null) return config.defaults.orderBy;
+
     const fields = removeConsecutiveSpaces(query).split(',');
+    // type coerced
+    // Array<{[K in keyof T]: 'desc' | 'asc'}>
     return fields.reduce((prev: any, fieldData) => {
         const fieldArray = fieldData.trim().split(' ');
-        const searchedField = fieldArray[0];
-        // Ignoring typescript because
-        // “Type instantiation is excessively deep and possibly infinite.”
-        // @ts-ignore-next-line
-        if (!config.orderBy.includes(searchedField)) {
+        // Known false type assertion: the fieldArray will not _always_ be type keyof T
+        // This stops typescript from yelling about the narrowed type
+        // https://fettblog.eu/typescript-array-includes/
+        const field = fieldArray[0] as keyof T;
+        if (!config.orderBy.includes(field)) {
             return prev;
         }
-        const parsedField = searchedField
-            .split('.')
-            .reduceRight((res: any, key: any) => {
-                return { [key]: res };
-            }, fieldArray[1] ?? 'asc');
-        return [...prev, parsedField];
-    }, []);
+
+        const fieldValue = fieldArray[1] === 'desc' ? 'desc' : 'asc';
+
+        return [...prev, { [field]: fieldValue }];
+        // as Array<{
+        //     [K in keyof T]: 'desc' | 'asc';
+        // }>;
+
+        // const parsedField = fieldArray[0]
+        //     .split('.')
+        //     .reduceRight(
+        //         (res, key) => ({ [key]: res }),
+        //         fieldArray[1] ?? 'asc'
+        //     );
+        // return [...prev, parsedField];
+    }, []) as Array<{ [K in keyof T]: 'desc' | 'asc' }>;
+    // return fieldArray.reduce((prev: Array<keyof T>, fieldData) => {
+    //     if (!config.orderBy.includes(fieldData)) {
+    //         return prev;
+    //     }
+    //     return [...prev, fieldData];
+    // }, []) as Array<keyof T>;
 }
 
 /**
@@ -126,10 +141,7 @@ function parsePageToken(string: string | null): {
 //     return { pageToken: parsedToken, nextPageToken: parsedToken + 1 };
 // }
 
-function parsePageSize<T extends GenericObject>(
-    string: string | null,
-    config: ApiDesignConfig<T>
-) {
+function parsePageSize<T>(string: string | null, config: ApiDesignConfig<T>) {
     if (string === null) return config.defaults.pageSize;
     const pageSize = Number(string);
     // Ensure page size is a number and
