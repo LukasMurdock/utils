@@ -1,5 +1,17 @@
 import { intervalToDuration, parseISO, formatDistance } from 'date-fns';
 
+export function daysAgo(date: Date, daysAgo: number) {
+    return date.getDate() - daysAgo;
+}
+
+export function aWeekAgo(date: Date) {
+    return daysAgo(date, 7);
+}
+
+export function aMonthAgo(date: Date) {
+    return daysAgo(date, 30);
+}
+
 /**
  * Sort array of objects by most recent date.
  * @param array array of objects

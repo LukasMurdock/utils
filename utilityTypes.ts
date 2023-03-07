@@ -1,4 +1,4 @@
-type KeyVal = Record<string, unknown>;
+export type KeyVal = Record<string, unknown>;
 
 export type GetObjectKeyVals<T extends KeyVal> = {
     [K in keyof T]: T[K];
@@ -12,6 +12,13 @@ export type NeverRight<
 export type Either<L extends KeyVal, R extends KeyVal> =
     | NeverRight<L, R>
     | NeverRight<R, L>;
+
+export type NestedKeys<Type extends KeyVal> = {
+    [Key in keyof Type]: Type[Key] extends KeyVal
+        ? // @ts-ignore
+          `${Key}` | `${Key}.${NestedKeyOf<Type[Key]>}`
+        : Key;
+}[Extract<keyof Type, string>];
 
 // type TestType = Either<{left: 'left'}, {right: 'right'}>
 
