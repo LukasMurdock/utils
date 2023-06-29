@@ -1,7 +1,18 @@
 // https://usehooks.com/useLocalStorage/
 import { useState } from 'react';
 
-export default function useLocalStorage(key: string, initialValue: string) {
+type SetValue<T> = React.Dispatch<React.SetStateAction<T>>;
+
+/**
+ * A hook to get and set values in local storage.
+ *
+ * A validator function is used to ensure the data is valid.
+ */
+export function useLocalStorage<TValue>(
+    key: string,
+    initialValue: TValue,
+    validator: (parsed: any) => TValue
+): [TValue, SetValue<TValue>] {
     // State to store our value
     // Pass initial state function to useState so logic is only executed once
     const [storedValue, setStoredValue] = useState(() => {
@@ -11,17 +22,26 @@ export default function useLocalStorage(key: string, initialValue: string) {
         try {
             // Get from local storage by key
             const item = window.localStorage.getItem(key);
+            if (!item) {
+                return initialValue;
+            }
+            const parsed = JSON.parse(item);
             // Parse stored json or if none return initialValue
-            return item ? JSON.parse(item) : initialValue;
+            const validated = validator(parsed);
+            if (validated) {
+                return validated;
+            } else {
+                return initialValue;
+            }
         } catch (error) {
             // If error also return initialValue
             console.log(error);
             return initialValue;
         }
     });
-    // Return a wrapped version of useState's setter function that ...
-    // ... persists the new value to localStorage.
-    const setValue = (value: string | ((s: string) => string)) => {
+    // Return a wrapped version of useState's setter function
+    // to persist the new value to localStorage.
+    const setValue: SetValue<TValue> = (value) => {
         try {
             // Allow value to be a function so we have same API as useState
             const valueToStore =
@@ -33,7 +53,7 @@ export default function useLocalStorage(key: string, initialValue: string) {
                 window.localStorage.setItem(key, JSON.stringify(valueToStore));
             }
         } catch (error) {
-            // A more advanced implementation would handle the error case
+            // Could handle the error case
             console.log(error);
         }
     };
